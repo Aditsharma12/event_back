@@ -81,5 +81,4 @@ def process_notification(data):
         except Exception as e:
             logger.error(f"Notification Service Error: {e}")
 
-if __name__ == "__main__":
-    start_consuming()
+
