@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -48,9 +47,6 @@ app.add_middleware(
 
 @app.get("/", tags=["General"])
 def read_root():
-    static_file_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
-    if os.path.exists(static_file_path):
-        return FileResponse(static_file_path)
     return {
         "message": "Welcome to the Incident Reporting Backend API. Go to /docs for interactive API documentation.",
         "status": "online"
