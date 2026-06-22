@@ -25,11 +25,23 @@ def analyze_image(image: UploadFile) -> dict:
     # Ensure the file pointer is at the beginning
     image.file.seek(0)
     
+    content_type = image.content_type
+    if not content_type or not content_type.startswith("image/"):
+        filename = (image.filename or "").lower()
+        if filename.endswith(".png"):
+            content_type = "image/png"
+        elif filename.endswith((".jpg", ".jpeg")):
+            content_type = "image/jpeg"
+        elif filename.endswith(".gif"):
+            content_type = "image/gif"
+        else:
+            content_type = "image/jpeg"  # Safe default fallback
+
     files = {
         "file": (
             image.filename,
             image.file,
-            image.content_type
+            content_type
         )
     }
 
