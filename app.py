@@ -72,6 +72,7 @@ async def report_incident(
     image: UploadFile = File(...),
     latitude: float = Form(...),
     longitude: float = Form(...),
+    created_at: str = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -79,6 +80,7 @@ async def report_incident(
     - image: Multipart image file
     - latitude: Location latitude from GPS
     - longitude: Location longitude from GPS
+    - created_at: Optional local datetime stamp from client
     
     Processes the image using Grounding DINO on Hugging Face and saves the result in Neon Postgres.
     """
@@ -94,7 +96,7 @@ async def report_incident(
             "severity": result.get("severity"),
             "severity_score": result.get("severity_score"),
             "raw_response": result,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": created_at or datetime.utcnow().isoformat()
         }
         
         background_tasks.add_task(process_storage, incident_data)

@@ -33,7 +33,13 @@ def process_storage(data):
         with Session(engine) as session:
             created_at = None
             if data.get("created_at"):
-                created_at = datetime.fromisoformat(data["created_at"])
+                try:
+                    dt_str = data["created_at"]
+                    if dt_str.endswith('Z'):
+                        dt_str = dt_str[:-1] + '+00:00'
+                    created_at = datetime.fromisoformat(dt_str)
+                except Exception as e:
+                    logger.error(f"Failed to parse datetime '{data.get('created_at')}': {e}")
                 
             incident = Incident(
                 latitude=data.get("latitude"),
@@ -61,7 +67,10 @@ def process_redis(data):
         timestamp = datetime.utcnow().timestamp()
         if data.get("created_at"):
             try:
-                timestamp = datetime.fromisoformat(data["created_at"]).timestamp()
+                dt_str = data["created_at"]
+                if dt_str.endswith('Z'):
+                    dt_str = dt_str[:-1] + '+00:00'
+                timestamp = datetime.fromisoformat(dt_str).timestamp()
             except Exception:
                 pass
                 
