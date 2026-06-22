@@ -117,15 +117,20 @@ async def report_incident(
             detail=f"An error occurred while reporting the incident: {str(e)}"
         )
 
-@app.get("/incidents", tags=["Incidents"])
-def get_incidents(db: Session = Depends(get_db)):
+@app.get("/incidents/recent", tags=["Incidents"])
+def get_recent_incidents(db: Session = Depends(get_db)):
     """
-    Retrieves all reported incidents from Redis cache. Falls back to database.
+    Retrieves recent incidents from Redis cache (stored for 24 hours).
+    Falls back to Postgres for last 24h if cache is empty.
     """
     try:
-        # Try fetching from Redis first
         if redis_client:
-            cached_incidents = redis_client.lrange("recent_incidents", 0, -1)
+            # Clean up old elements first
+            one_day_ago = datetime.utcnow().timestamp() - 86400
+            redis_client.zremrangebyscore("recent_incidents_zset", "-inf", one_day_ago)
+            
+            # Fetch all elements in reverse chronological order
+            cached_incidents = redis_client.zrevrange("recent_incidents_zset", 0, -1)
             if cached_incidents:
                 return {
                     "success": True,
@@ -136,7 +141,28 @@ def get_incidents(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Redis cache error: {e}")
         
-    # Fallback to DB
+    # Fallback to DB (query only last 24h)
+    try:
+        from datetime import timedelta
+        one_day_ago_dt = datetime.utcnow() - timedelta(days=1)
+        incidents = db.query(Incident).filter(Incident.created_at >= one_day_ago_dt).order_by(Incident.created_at.desc()).all()
+        return {
+            "success": True,
+            "count": len(incidents),
+            "incidents": incidents,
+            "source": "database_fallback"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch recent incidents: {str(e)}"
+        )
+
+@app.get("/incidents/all", tags=["Incidents"])
+def get_all_incidents(db: Session = Depends(get_db)):
+    """
+    Retrieves all reported incidents directly from Postgres database.
+    """
     try:
         incidents = db.query(Incident).order_by(Incident.created_at.desc()).all()
         return {
@@ -148,5 +174,12 @@ def get_incidents(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to fetch incidents: {str(e)}"
+            detail=f"Failed to fetch all incidents: {str(e)}"
         )
+
+@app.get("/incidents", tags=["Incidents"])
+def get_incidents_legacy(db: Session = Depends(get_db)):
+    """
+    Legacy endpoint that redirects/falls back to fetching all incidents from Postgres.
+    """
+    return get_all_incidents(db)

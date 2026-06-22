@@ -51,16 +51,31 @@ def process_storage(data):
         logger.error(f"Storage Service Error: {e}")
 
 def process_redis(data):
-    """Redis Cache Service: Stores the latest incidents in Redis for quick retrieval"""
+    """Redis Cache Service: Stores the latest incidents in Redis for quick retrieval (expires in 24 hours)"""
     if not redis_client:
         return
         
     try:
-        # Prepend the new incident to the list
-        redis_client.lpush("recent_incidents", json.dumps(data))
-        # Keep only the latest 100 incidents to avoid memory issues
-        redis_client.ltrim("recent_incidents", 0, 99)
-        logger.info("Redis Cache Service: Cached incident in Redis")
+        # We use a Redis Sorted Set (ZSET) to store recent incidents.
+        # The score is the timestamp, allowing us to query by time windows and purge old items easily.
+        timestamp = datetime.utcnow().timestamp()
+        if data.get("created_at"):
+            try:
+                timestamp = datetime.fromisoformat(data["created_at"]).timestamp()
+            except Exception:
+                pass
+                
+        # Add to the sorted set
+        redis_client.zadd("recent_incidents_zset", {json.dumps(data): timestamp})
+        
+        # Keep only the latest 100 to avoid unbounded memory usage
+        redis_client.zremrangebyrank("recent_incidents_zset", 0, -101)
+        
+        # Purge items older than 24 hours (86400 seconds)
+        one_day_ago = datetime.utcnow().timestamp() - 86400
+        redis_client.zremrangebyscore("recent_incidents_zset", "-inf", one_day_ago)
+        
+        logger.info("Redis Cache Service: Saved and pruned recent incidents in ZSET")
     except Exception as e:
         logger.error(f"Redis Cache Service Error: {e}")
 
